@@ -119,20 +119,20 @@ fastify.post('/v1/messages', async (request, reply) => {
       // Recursively process all properties
       const result = {};
       for (const key in schema) {
-      if (key === 'properties' && typeof schema[key] === 'object') {
-        result[key] = {};
-        for (const propKey in schema[key]) {
-          result[key][propKey] = removeUriFormat(schema[key][propKey]);
+        if (key === 'properties' && typeof schema[key] === 'object') {
+          result[key] = {};
+          for (const propKey in schema[key]) {
+            result[key][propKey] = removeUriFormat(schema[key][propKey]);
+          }
+        } else if (key === 'items' && typeof schema[key] === 'object') {
+          result[key] = removeUriFormat(schema[key]);
+        } else if (key === 'additionalProperties' && typeof schema[key] === 'object') {
+          result[key] = removeUriFormat(schema[key]);
+        } else if (['anyOf', 'allOf', 'oneOf'].includes(key) && Array.isArray(schema[key])) {
+          result[key] = schema[key].map(item => removeUriFormat(item));
+        } else {
+          result[key] = removeUriFormat(schema[key]);
         }
-      } else if (key === 'items' && typeof schema[key] === 'object') {
-        result[key] = removeUriFormat(schema[key]);
-      } else if (key === 'additionalProperties' && typeof schema[key] === 'object') {
-        result[key] = removeUriFormat(schema[key]);
-      } else if (['anyOf', 'allOf', 'oneOf'].includes(key) && Array.isArray(schema[key])) {
-        result[key] = schema[key].map(item => removeUriFormat(item));
-      } else {
-        result[key] = removeUriFormat(schema[key]);
-      }
       }
       return result;
     };
@@ -182,7 +182,6 @@ fastify.post('/v1/messages', async (request, reply) => {
       if (data.error) {
         throw new Error(data.error.message)
       }
-
 
       const choice = data.choices[0]
       const openaiMessage = choice.message
@@ -283,7 +282,6 @@ fastify.post('/v1/messages', async (request, reply) => {
         // OpenAI streaming responses are typically sent as lines prefixed with "data: "
         const lines = chunk.split('\n')
 
-
         for (const line of lines) {
           const trimmed = line.trim()
           if (trimmed === '' || !trimmed.startsWith('data:')) continue
@@ -320,7 +318,13 @@ fastify.post('/v1/messages', async (request, reply) => {
             return
           }
 
-          const parsed = JSON.parse(dataStr)
+          let parsed
+          try {
+            parsed = JSON.parse(dataStr)
+          } catch (e) {
+            debug('Skipping non-JSON line:', dataStr, e)
+            continue // skip this line and move to the next
+          }
           if (parsed.error) {
             throw new Error(parsed.error.message)
           }
